@@ -12,7 +12,7 @@ import (
 func main() {
 	// Load environment setup safely
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, defaulting to system environment variables")
+		log.Println("[WARN] No .env file found, defaulting to system environment variables")
 	}
 
 	dbPath := os.Getenv("DB_PATH")
@@ -24,30 +24,49 @@ func main() {
 	database := db.InitDB(dbPath)
 	defer database.Close()
 
-	// 2. Fetch raw target emails from the secured environment layer
+	// 2. Fetch network and target configuration keys
+	imapServer := os.Getenv("YAHOO_IMAP_SERVER")
 	envEmail1 := os.Getenv("USER_1_EMAIL")
 	envEmail2 := os.Getenv("USER_2_EMAIL")
+	imapPassword1 := os.Getenv("YAHOO_PASSWORD_1")
+	imapPassword2 := os.Getenv("YAHOO_PASSWORD_2")
 
-	if envEmail1 == "" || envEmail2 == "" {
-		log.Fatalf("Security Failure: Target emails missing from your local .env configuration")
+	if imapServer == "" || envEmail1 == "" || envEmail2 == "" || imapPassword1 == "" || imapPassword2 == "" {
+		log.Fatalf("[ERROR] Security Failure: Required configurations missing from your local .env file")
 	}
 
-	// 3. Provision Isolated Multi-Tenant Accounts (Hashing occurs instantly inside internal/db)
+	// 3. Provision Isolated Multi-Tenant Accounts
 	id1, err := db.CreateAccount(database, envEmail1)
 	if err != nil {
-		log.Fatalf("Failed to provision User 1: %v", err)
+		log.Fatalf("[ERROR] Failed to provision User 1: %v", err)
 	}
-	// Note: logged the IDs to prove isolation works, but no leaks of plain-text strings to the console logs
-	log.Printf("Secure Blind Index Account mapped successfully [Internal ID: %d]", id1)
+	log.Printf("[SECURE] Secure Blind Index Account mapped successfully [Internal ID: %d]", id1)
 
 	id2, err := db.CreateAccount(database, envEmail2)
 	if err != nil {
-		log.Fatalf("Failed to provision User 2: %v", err)
+		log.Fatalf("[ERROR] Failed to provision User 2: %v", err)
 	}
-	log.Printf("Secure Blind Index Account mapped successfully [Internal ID: %d]", id2)
+	log.Printf("[SECURE] Secure Blind Index Account mapped successfully [Internal ID: %d]", id2)
 
-	log.Println("Parcel Herder database architecture is live, secure, and cleanly mapped!")
+	log.Println("[INIT] Parcel Herder database architecture is live, secure, and cleanly mapped!")
 
-	// TEST PACKAGE
-	// _ = scraper.FetchAndProcessMailboxes("imap.example.com:993", "test@example.com", "pass", database)
+	// 4. Define our synchronization targets dynamically
+	targets := []struct {
+		email    string
+		password string
+	}{
+		{email: envEmail1, password: imapPassword1},
+		{email: envEmail2, password: imapPassword2},
+	}
+
+	// 5. Execute the scraper stream loops sequentially
+	log.Println("[SYNC] Kicking off network synchronization sequence...")
+	for _, target := range targets {
+		err = scraper.FetchAndProcessMailboxes(imapServer, target.email, target.password, database)
+		if err != nil {
+			log.Printf("[WARN] IMAP Stream Notification for %s: %v", target.email, err)
+		}
+	}
+
+	log.Println("All synchronization routines finalized!")
 }

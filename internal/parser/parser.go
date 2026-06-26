@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// LogisticsPayload holds the extracted carrier telemetry and locker status tokens.
 type LogisticsPayload struct {
 	TrackingNumber string
 	Carrier        string
@@ -18,7 +19,7 @@ var (
 	fedexRegex = regexp.MustCompile(`\b([0-9]{12}|[0-9]{15})\b`)
 	upsRegex   = regexp.MustCompile(`\b(1Z[A-Z0-9]{16})\b`)
 
-	//DHL International Express Standard 10-digit footprint
+	// DHL International Express Standard 10-digit footprint
 	dhlRegex = regexp.MustCompile(`\b([0-9]{10})\b`)
 
 	// OSM Worldwide: Captures their prefix layout or falls back to USPS handoffs
@@ -28,11 +29,12 @@ var (
 	amazonLockerRegex = regexp.MustCompile(`(?i)(?:locker|pickup|code|pin)[^\d]*([0-9]{6})\b`)
 )
 
+// ParseEmailBody scans raw email data for active package tracking numbers or smart locker pickup codes.
 func ParseEmailBody(body string) *LogisticsPayload {
 	payload := &LogisticsPayload{}
 	normalized := strings.ToLower(body)
 
-	// 1. Check for Amazon Hub Locker Verification Codes
+	// 1. Scan for Amazon Hub Locker Verification Codes
 	if matches := amazonLockerRegex.FindStringSubmatch(normalized); len(matches) > 1 {
 		payload.LockerCode = matches[1]
 		payload.IsLockerToken = true
@@ -40,7 +42,7 @@ func ParseEmailBody(body string) *LogisticsPayload {
 		return payload
 	}
 
-	// 2. Check for Carrier Footprints
+	// 2. Scan for Carrier Footprints sequentially
 	if osmRegex.MatchString(body) {
 		payload.TrackingNumber = osmRegex.FindString(body)
 		payload.Carrier = "OSM Worldwide"
@@ -57,7 +59,6 @@ func ParseEmailBody(body string) *LogisticsPayload {
 		return payload
 	}
 	if fedexRegex.MatchString(body) {
-		// Quick edge case check: ensure 10-digit DHL numbers don't get misidentified as 12-digit FedEx
 		payload.TrackingNumber = fedexRegex.FindString(body)
 		payload.Carrier = "FedEx"
 		return payload
