@@ -3,13 +3,16 @@ package db
 import (
 	"crypto/sha256"
 	"database/sql"
+	"embed"
 	"encoding/hex"
 	"log"
-	"os"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+//go:embed schema.sql
+var schemaFS embed.FS
 
 // InitDB initializes the database and configures performance pragmas.
 func InitDB(filepath string) *sql.DB {
@@ -18,21 +21,21 @@ func InitDB(filepath string) *sql.DB {
 		log.Fatalf("[ERROR] Failed to connect to database: %v", err)
 	}
 
-	// Pragmas for local home-server write optimization
 	_, err = db.Exec(`PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;`)
 	if err != nil {
 		log.Fatalf("[ERROR] Failed to set SQLite pragmas: %v", err)
 	}
 
-	executeSchema(db, "internal/db/schema.sql")
+	executeSchema(db)
 	return db
 }
 
-// executeSchema reads and executes the raw SQL schema initialization script.
-func executeSchema(db *sql.DB, schemaFile string) {
-	statements, err := os.ReadFile(schemaFile)
+// executeSchema reads the embedded schema text and executes the initialization script.
+func executeSchema(db *sql.DB) {
+	// Read directly from our embedded file system variable
+	statements, err := schemaFS.ReadFile("schema.sql")
 	if err != nil {
-		log.Fatalf("[ERROR] Failed to read database schema file: %v", err)
+		log.Fatalf("[ERROR] Failed to read embedded database schema file: %v", err)
 	}
 
 	_, err = db.Exec(string(statements))
@@ -40,7 +43,7 @@ func executeSchema(db *sql.DB, schemaFile string) {
 		log.Fatalf("[ERROR] Failed to execute schema initialization script: %v", err)
 	}
 
-	log.Println("[INIT] Database architecture initialized smoothly via external schema file.")
+	log.Println("[INIT] Database architecture initialized smoothly via embedded schema.")
 }
 
 // hashEmail normalizes and hashes the email address so raw text never hits the disk.
@@ -124,4 +127,26 @@ func InsertOrUpdatePackage(db *sql.DB, accountID int64, trackingNum, carrier, lo
 	}
 
 	return tx.Commit()
+}
+
+// CheckDriverShortfalls inspects if an account has packages marked delivered
+// to a locker, but lacks an active electronic entry code in locker_status.
+func CheckDriverShortfalls(db *sql.DB, accountID int64) (bool, error) {
+	var count int
+	query := `
+		SELECT COUNT(*) 
+		FROM packages p
+		LEFT JOIN locker_status l ON p.account_id = l.account_id AND l.is_active = 1
+		WHERE p.account_id = ? 
+		  AND p.last_status = 'Delivered' 
+		  AND (p.location_state LIKE '%Locker%' OR p.location_state LIKE '%Hub%')
+		  AND (l.latest_code IS NULL OR l.latest_code = '');
+	`
+
+	err := db.QueryRow(query, accountID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
 }
