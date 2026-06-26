@@ -2,21 +2,23 @@
 
 A lightweight, concurrent logistics background daemon and dashboard built in Go. `parcel-herder` runs locally on a home lab node, scraping inbound shipping notifications via secure IMAP streams, managing carrier telemetry with an internal SQLite engine, and providing an elegant single-pane-of-glass terminal view for pending deliveries and smart locker pickup tokens.
 
-## Key Architectural Features
+## ✨ Key Architectural Features
 - **Multi-Tenant State Management:** Engineered with a data protection model allowing isolation across multiple discrete mailboxes without data cross-contamination.
 - **Cryptographic Blind Indexing:** Enforces a DevSecOps-first approach by storing SHA-256 hashes of incoming emails, keeping raw personal identities completely off the disk layout.
 - **Defensive Multi-Box Tracking:** Implements SQLite composite primary keys to safely track split-shipments sharing identical tracking metadata.
 - **Locker Token Pool Optimization:** Minimizes visual friction by tracking multi-package deliveries via a single active master key row per account.
 - **DevSecOps First Design:** Complete decoupling of configuration environments via `.env` architectures. No plain-text access tokens touch the database layer.
+- **Structured DevOps Telemetry:** Built with consistent, scannable log tokens (`[INIT]`, `[SECURE]`, `[SYNC]`, `[OK]`, `[ERROR]`) for clean, production-grade terminal visibility.
 
 ## 🛠️ Project File Layout
 ```text
 ├── cmd/
-│   └── main.go                 # App entry point & runtime initialization loop
+│   └── main.go                 # App entry point & multi-tenant runtime sync loop
 ├── internal/
 │   ├── db/
-│   │   ├── db.go               # Thread-safe SQLite connection & blind index routines
-│   │   └── schema.sql          # Multi-tenant data plane schema definitions
+│   │   ├── db.go               # Thread-safe SQLite atomic transaction routines
+│   │   ├── db_test.go          # Native unit tests using fast, isolated :memory: targets
+│   │   └── schema.sql          # Normalized multi-table schemas (accounts, packages, locker_status)
 │   ├── parser/
 │   │   └── parser.go           # Compile-once regex logistics telemetry engine
 │   └── scraper/
@@ -25,7 +27,7 @@ A lightweight, concurrent logistics background daemon and dashboard built in Go.
 │   └── (HTML & plain CSS interfaces)
 ├── .env                        # Local environment credentials (gitignored)
 └── go.mod
-````
+```
 
 ## 🗺️ Engineering Roadmap
 ### Phase 1: Local Foundation & Data Isolation
@@ -39,7 +41,8 @@ A lightweight, concurrent logistics background daemon and dashboard built in Go.
 - [x] Extend regex engine footprints to support international DHL Express and OSM Worldwide tracking.
 - [x] Build strict pattern arrays to isolate anonymous 6-digit Amazon Hub Locker pickup tokens.
 - [x] Construct a secure TLS IMAP connection layer utilizing `go-imap/v2` streaming mechanics.
-- [ ] Connect the scraper's parsing matches directly to database write-routines (`CreatePackage`).
+- [x] Connect the scraper's parsing matches directly to database write-routines (`InsertOrUpdatePackage`).
+- [x] Establish isolated native test coverage using built-in `go test` mechanics.
 
 ### Phase 3: Hardware Exception Catching
 - [ ] Map driver-shortfall detection logic (detecting "Left at Locker" status flags lacking actual electronic Hub terminal verification codes).
