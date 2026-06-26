@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/Cfirth725/parcel-herder/internal/db"
-	"github.com/Cfirth725/parcel-herder/internal/parser"
+	"github.com/Cfirth725/parcel-herder/internal/scraper"
 	"github.com/joho/godotenv"
 )
 
@@ -47,4 +47,7 @@ func main() {
 	log.Printf("Secure Blind Index Account mapped successfully [Internal ID: %d]", id2)
 
 	log.Println("Parcel Herder database architecture is live, secure, and cleanly mapped!")
+
+	// TEST PACKAGE
+	// _ = scraper.FetchAndProcessMailboxes("imap.example.com:993", "test@example.com", "pass", database)
 }
