@@ -15,8 +15,8 @@ A lightweight, concurrent logistics background daemon and dashboard built in Go.
 
 ## 🗺️ Engineering Roadmap
 ### Phase 1: Local Foundation & Data Isolation 
-- [ ] Establish secure `.env` runtime injection.
-- [ ] Implement multi-tenant schema DDL via external `schema.sql`.
+- [x] Establish secure `.env` runtime injection.
+- [x] Implement multi-tenant schema DDL via external `schema.sql`.
 - [ ] Construct the dynamic `db.go` API layer supporting multi-user account allocation.
 
 ### Phase 2: Telemetry Ingestion Engine
