@@ -6,6 +6,7 @@ import (
 
 	"github.com/Cfirth725/parcel-herder/internal/db"
 	"github.com/Cfirth725/parcel-herder/internal/scraper"
+	"github.com/Cfirth725/parcel-herder/internal/server"
 	"github.com/joho/godotenv"
 )
 
@@ -69,4 +70,12 @@ func main() {
 	}
 
 	log.Println("All synchronization routines finalized!")
+
+	// STRICT PORT CHECKING: Fail fast if the environment isn't fully configured
+	appPort := os.Getenv("PORT")
+	if appPort == "" {
+		log.Fatalf("[CRITICAL] Configuration Failure: PORT variable is missing or blank in your local .env file")
+	}
+	srv := server.NewServer(database)
+	srv.Start(appPort)
 }

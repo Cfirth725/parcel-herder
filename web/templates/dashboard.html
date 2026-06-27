@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parcel Herder Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <h1>📦 PARCEL HERDER</h1>
+        <span class="status-badge live">System Active</span>
+    </header>
+
+    <main class="dashboard-container">
+        <section class="console-card">
+            <h2>Add / Update Tracking</h2>
+            <form action="/package/manual" method="POST" class="manual-form">
+                <input type="text" name="carrier" placeholder="Carrier (e.g., USPS, Etsy)" required>
+                <input type="text" name="tracking_number" placeholder="Tracking Number or PIN" required>
+                <button type="submit" class="btn-primary">Register Package</button>
+            </form>
+        </section>
+
+        <section class="stream-section">
+            <h2>Active Logistics Pipeline</h2>
+
+            {{ if ne .LockerCode "" }}
+                <div class="master-locker-console">
+                    <div class="locker-shield-badge">🔒 ACTIVE AMAZON LOCKER MASTER HUB PIN</div>
+                    <div class="master-pin-display">{{ .LockerCode }}</div>
+                    <p class="locker-subtext">Use this unified access token at the locker kiosk terminal to open all pending storage cells.</p>
+                </div>
+            {{ end }}
+
+            <div class="matrix-grid">
+                {{ range .Packages }}
+                    <div class="matrix-card {{ if eq .TrackingNumber "MANUAL_ACTION_REQUIRED" }}action-required{{ end }}">
+                        <div class="card-header">
+                            <span class="carrier-label">{{ .Carrier }}</span>
+                            <span class="timestamp">{{ .CreatedAt }}</span>
+                        </div>
+                        
+                        <div class="card-body">
+                            {{ if eq .TrackingNumber "MANUAL_ACTION_REQUIRED" }}
+                                <div class="action-notice">
+                                    <p>⚠️ Tracking data hidden by platform encryption.</p>
+                                    <span class="subtext">Please check email to retrieve trailing code.</span>
+                                </div>
+                            {{ else }}
+                                <div class="tracking-display">
+                                    <span class="label">TRACKING NUMBER</span>
+                                    <code>{{ .TrackingNumber }}</code>
+                                </div>
+                            {{ end }}
+                        </div>
+                    </div>
+                {{ else }}
+                    <div class="empty-state">
+                        <p>No active shipments found in the pipeline.</p>
+                    </div>
+                {{ end }}
+            </div>
+        </section>
+    </main>
+</body>
+</html>

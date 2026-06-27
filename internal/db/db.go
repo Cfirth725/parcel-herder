@@ -87,7 +87,7 @@ func GetAccountID(db *sql.DB, email string) (int64, error) {
 	return id, nil
 }
 
-// InsertOrUpdatePackage writes parsed tracking telemetry into the database plane using an atomic transaction.
+// InsertOrUpdatePackage writes parsed tracking telemetry into the database plane defensively.
 func InsertOrUpdatePackage(db *sql.DB, accountID int64, trackingNum, carrier, lockerCode string, isLockerInt int) error {
 	tx, err := db.Begin()
 	if err != nil {
@@ -95,22 +95,43 @@ func InsertOrUpdatePackage(db *sql.DB, accountID int64, trackingNum, carrier, lo
 	}
 	defer tx.Rollback()
 
-	// 1. If we have a tracking number, write it to the packages table
+	// 1. Process Packages Logically
 	if trackingNum != "" {
-		packageQuery := `
-			INSERT INTO packages (account_id, tracking_number, box_sequence, carrier, last_status, location_state, is_active, updated_at)
-			VALUES (?, ?, 1, ?, 'In Transit', 'Sorting Facility', 1, CURRENT_TIMESTAMP)
-			ON CONFLICT(tracking_number, box_sequence) DO UPDATE SET
-				last_status = 'In Transit',
-				updated_at = CURRENT_TIMESTAMP;
-		`
-		_, err = tx.Exec(packageQuery, accountID, trackingNum, carrier)
-		if err != nil {
-			return err
+		if trackingNum == "MANUAL_ACTION_REQUIRED" {
+			// Find the current highest box sequence for Etsy fallbacks to satisfy the unique constraint
+			var maxSeq int
+			err := tx.QueryRow(`SELECT COALESCE(MAX(box_sequence), 0) FROM packages WHERE tracking_number = 'MANUAL_ACTION_REQUIRED'`).Scan(&maxSeq)
+			if err != nil {
+				return err
+			}
+			nextSeq := maxSeq + 1
+
+			// Standard flat insert with a unique sequence number
+			insertQuery := `
+				INSERT INTO packages (account_id, tracking_number, box_sequence, carrier, last_status, location_state, is_active, updated_at)
+				VALUES (?, ?, ?, ?, 'In Transit', 'Action Required', 1, CURRENT_TIMESTAMP);
+			`
+			_, err = tx.Exec(insertQuery, accountID, trackingNum, nextSeq, carrier)
+			if err != nil {
+				return err
+			}
+		} else {
+			// Standard Deduplication Upsert for real carrier tracking numbers
+			upsertQuery := `
+				INSERT INTO packages (account_id, tracking_number, box_sequence, carrier, last_status, location_state, is_active, updated_at)
+				VALUES (?, ?, 1, ?, 'In Transit', 'Sorting Facility', 1, CURRENT_TIMESTAMP)
+				ON CONFLICT(tracking_number, box_sequence) DO UPDATE SET
+					last_status = 'In Transit',
+					updated_at = CURRENT_TIMESTAMP;
+			`
+			_, err = tx.Exec(upsertQuery, accountID, trackingNum, carrier)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
-	// 2. If an Amazon Hub locker token is detected, write it to the locker_status table
+	// 2. Process Amazon Hub Locker Codes Safely
 	if lockerCode != "" {
 		lockerQuery := `
 			INSERT INTO locker_status (account_id, latest_code, is_active, updated_at)
