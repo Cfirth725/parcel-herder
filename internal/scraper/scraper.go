@@ -32,7 +32,7 @@ func FetchAndProcessMailboxes(server, email, password string, database *sql.DB) 
 	}
 	log.Printf("[SECURE] Authenticated successfully for: %s", email)
 
-	mbox, err := client.Select("INBOX", nil).Wait()
+	mbox, err := client.Select("Logistics", nil).Wait()
 	if err != nil {
 		return err
 	}
