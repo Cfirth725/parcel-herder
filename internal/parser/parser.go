@@ -18,15 +18,14 @@ var (
 	uspsRegex  = regexp.MustCompile(`\b(94[0-9]{20}|92[0-9]{20})\b`)
 	fedexRegex = regexp.MustCompile(`\b([0-9]{12}|[0-9]{15})\b`)
 	upsRegex   = regexp.MustCompile(`\b(1Z[A-Z0-9]{16})\b`)
-
-	// DHL International Express Standard 10-digit footprint
-	dhlRegex = regexp.MustCompile(`\b([0-9]{10})\b`)
-
-	// OSM Worldwide: Captures their prefix layout or falls back to USPS handoffs
-	osmRegex = regexp.MustCompile(`(?i)\b(OSM[0-9]{10})\b`)
+	dhlRegex   = regexp.MustCompile(`\b([0-9]{10})\b`)
+	osmRegex   = regexp.MustCompile(`(?i)\b(OSM[0-9]{10})\b`)
 
 	// Amazon Hub Locker 6-Digit Pickup Token Regex
 	amazonLockerRegex = regexp.MustCompile(`(?i)(?:locker|pickup|code|pin)[^\d]*([0-9]{6})\b`)
+
+	// Etsy Link Extraction Regex: Matches tracking info inside their URL layout
+	etsyRegex = regexp.MustCompile(`(?i)etsy\.com/shipping/track/([^?\s"\']+)`)
 )
 
 // ParseEmailBody scans raw email data for active package tracking numbers or smart locker pickup codes.
@@ -42,7 +41,23 @@ func ParseEmailBody(body string) *LogisticsPayload {
 		return payload
 	}
 
-	// 2. Scan for Carrier Footprints sequentially
+	// 2. Scan for Etsy Link footprints before standard carrier checks
+	if matches := etsyRegex.FindStringSubmatch(body); len(matches) > 1 {
+		extractedNum := matches[1]
+		payload.TrackingNumber = extractedNum
+
+		// Determine the underlying carrier by passing the extracted number back through our rules
+		if upsRegex.MatchString(extractedNum) {
+			payload.Carrier = "UPS (via Etsy)"
+		} else if uspsRegex.MatchString(extractedNum) {
+			payload.Carrier = "USPS (via Etsy)"
+		} else {
+			payload.Carrier = "Etsy Shipping"
+		}
+		return payload
+	}
+
+	// 3. Scan for Carrier Footprints sequentially
 	if osmRegex.MatchString(body) {
 		payload.TrackingNumber = osmRegex.FindString(body)
 		payload.Carrier = "OSM Worldwide"
