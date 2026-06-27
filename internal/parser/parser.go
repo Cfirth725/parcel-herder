@@ -15,11 +15,13 @@ type LogisticsPayload struct {
 
 var (
 	// Standard Logistics Carriers Regex
-	uspsRegex  = regexp.MustCompile(`\b(94[0-9]{20}|92[0-9]{20})\b`)
-	fedexRegex = regexp.MustCompile(`\b([0-9]{12}|[0-9]{15})\b`)
-	upsRegex   = regexp.MustCompile(`\b(1Z[A-Z0-9]{16})\b`)
-	dhlRegex   = regexp.MustCompile(`\b([0-9]{10})\b`)
-	osmRegex   = regexp.MustCompile(`(?i)\b(OSM[0-9]{10})\b`)
+	usps22DigitRegex = regexp.MustCompile(`(9[2345][0-9]{20})`)
+	fedexRegex       = regexp.MustCompile(`([0-9]{12}|[0-9]{15})`)
+	upsRegex         = regexp.MustCompile(`(?i)(1Z[A-Z0-9]{16})`)
+	osmRegex         = regexp.MustCompile(`(?i)(OSM[0-9]{10})`)
+
+	// A strict 10-digit scanner for real DHL tracking numbers
+	dhlStrictRegex = regexp.MustCompile(`\b([0-9]{10})\b`)
 
 	// Amazon Hub Locker 6-Digit Pickup Token Regex
 	amazonLockerRegex = regexp.MustCompile(`(?i)(?:locker|pickup|code|pin)[^\d]*([0-9]{6})\b`)
@@ -41,33 +43,40 @@ func ParseEmailBody(body string) *LogisticsPayload {
 		return payload
 	}
 
-	// 2. Scan for Etsy Link footprints before standard carrier checks
+	// 2. INTERCEPT ENCRYPTED ETSY REDIRECT LINKS
+	if strings.Contains(normalized, "ablink.account.etsy.com") || (strings.Contains(normalized, "etsy") && strings.Contains(normalized, "track package")) {
+		payload.TrackingNumber = "MANUAL_ACTION_REQUIRED"
+		payload.Carrier = "Etsy (Action Required)"
+		return payload
+	}
+
+	// 3. Scan for clean Etsy Link footprints (non-ablink style)
 	if matches := etsyRegex.FindStringSubmatch(body); len(matches) > 1 {
 		extractedNum := matches[1]
 		payload.TrackingNumber = extractedNum
 
-		// Determine the underlying carrier by passing the extracted number back through our rules
-		if upsRegex.MatchString(extractedNum) {
-			payload.Carrier = "UPS (via Etsy)"
-		} else if uspsRegex.MatchString(extractedNum) {
+		if usps22DigitRegex.MatchString(extractedNum) {
 			payload.Carrier = "USPS (via Etsy)"
+		} else if strings.HasPrefix(strings.ToUpper(extractedNum), "1Z") || upsRegex.MatchString(extractedNum) {
+			payload.Carrier = "UPS (via Etsy)"
 		} else {
 			payload.Carrier = "Etsy Shipping"
 		}
 		return payload
 	}
 
-	// 3. Scan for Carrier Footprints sequentially
-	if osmRegex.MatchString(body) {
-		payload.TrackingNumber = osmRegex.FindString(body)
-		payload.Carrier = "OSM Worldwide"
+	// 4. Scan for high-certainty 22-digit sequence (USPS / OSM / Wizmo final mile)
+	if usps22DigitRegex.MatchString(body) {
+		payload.TrackingNumber = usps22DigitRegex.FindString(body)
+		if strings.Contains(normalized, "wizmo") || strings.Contains(normalized, "osm") {
+			payload.Carrier = "OSM Worldwide (via Wizmo)"
+		} else {
+			payload.Carrier = "USPS"
+		}
 		return payload
 	}
-	if uspsRegex.MatchString(body) {
-		payload.TrackingNumber = uspsRegex.FindString(body)
-		payload.Carrier = "USPS"
-		return payload
-	}
+
+	// 5. Scan for other standard carrier footprints
 	if upsRegex.MatchString(body) {
 		payload.TrackingNumber = upsRegex.FindString(body)
 		payload.Carrier = "UPS"
@@ -78,8 +87,15 @@ func ParseEmailBody(body string) *LogisticsPayload {
 		payload.Carrier = "FedEx"
 		return payload
 	}
-	if dhlRegex.MatchString(body) {
-		payload.TrackingNumber = dhlRegex.FindString(body)
+	if osmRegex.MatchString(body) {
+		payload.TrackingNumber = osmRegex.FindString(body)
+		payload.Carrier = "OSM Worldwide"
+		return payload
+	}
+
+	// 6. Catch DHL strictly if the context says 'dhl' and it finds a standalone 10-digit ID
+	if strings.Contains(normalized, "dhl") && dhlStrictRegex.MatchString(body) {
+		payload.TrackingNumber = dhlStrictRegex.FindString(body)
 		payload.Carrier = "DHL"
 		return payload
 	}
