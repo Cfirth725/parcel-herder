@@ -278,3 +278,32 @@ func (s *Server) ConvertToUSPSHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Location", "/")
 	w.WriteHeader(http.StatusSeeOther)
 }
+
+// StartArchivingCron boots an asynchronous background ticker that periodically
+// sweeps historical archived shipments out of the active packages table layer.
+func (s *Server) StartArchivingCron(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+
+	// Execute the routine asynchronously inside a dedicated background goroutine loop
+	go func() {
+		log.Printf("[INIT] Automated Package Archiving Cron activated (Interval: %v)", interval)
+		for range ticker.C {
+			// Purge archived entries older than 7 days to keep SQLite indexing incredibly fast
+			query := `
+				DELETE FROM packages 
+				WHERE package_state = 3 
+				  AND updated_at < datetime('now', '-7 days')`
+
+			res, err := s.DB.Exec(query)
+			if err != nil {
+				log.Printf("[ERROR] Archiving cron failed during database purge sweep: %v", err)
+				continue
+			}
+
+			rowsDeleted, _ := res.RowsAffected()
+			if rowsDeleted > 0 {
+				log.Printf("[OK] Archiving Cron Sweep Complete: Vacuumed %d stale historical records from disk.", rowsDeleted)
+			}
+		}
+	}()
+}

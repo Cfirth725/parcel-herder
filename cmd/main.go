@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"time"
 
 	"github.com/Cfirth725/parcel-herder/internal/db"
 	"github.com/Cfirth725/parcel-herder/internal/scraper"
@@ -73,5 +74,6 @@ func main() {
 	}
 
 	srv := server.NewServer(database)
+	srv.StartArchivingCron(12 * time.Hour)
 	srv.Start(appPort)
 }
