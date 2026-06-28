@@ -23,8 +23,8 @@ var (
 	// A strict 10-digit scanner for real DHL tracking numbers
 	dhlStrictRegex = regexp.MustCompile(`\b([0-9]{10})\b`)
 
-	// Amazon Hub Locker 6-Digit Pickup Token Regex
-	amazonLockerRegex = regexp.MustCompile(`(?i)(?:locker|pickup|code|pin)[^\d]*([0-9]{6})\b`)
+	// Resilient Amazon Hub Locker 6-Digit Pickup Token Regex
+	amazonLockerRegex = regexp.MustCompile(`(?i)(?:locker|pickup|code|pin)\b.*?([0-9]{6})\b`)
 
 	// Etsy Link Extraction Regex: Matches tracking info inside their URL layout
 	etsyRegex = regexp.MustCompile(`(?i)etsy\.com/shipping/track/([^?\s"\']+)`)
@@ -69,7 +69,7 @@ func ParseEmailBody(body string) *LogisticsPayload {
 	if usps22DigitRegex.MatchString(body) {
 		payload.TrackingNumber = usps22DigitRegex.FindString(body)
 		if strings.Contains(normalized, "wizmo") || strings.Contains(normalized, "osm") {
-			payload.Carrier = "OSM Worldwide (via Wizmo)"
+			payload.Carrier = "OSM"
 		} else {
 			payload.Carrier = "USPS"
 		}
@@ -89,7 +89,7 @@ func ParseEmailBody(body string) *LogisticsPayload {
 	}
 	if osmRegex.MatchString(body) {
 		payload.TrackingNumber = osmRegex.FindString(body)
-		payload.Carrier = "OSM Worldwide"
+		payload.Carrier = "OSM" // Unified tag
 		return payload
 	}
 

@@ -99,6 +99,13 @@
                                 <input type="hidden" name="id" value="{{ .ID }}">
                                 <button type="submit" class="action-btn delay-btn" title="Push Target Date Forward +1 Day">+1 Day</button>
                             </form>
+
+                            {{ if eq .Carrier "OSM" }}
+                                <form action="/package/convert-usps" method="POST" style="display:inline;">
+                                    <input type="hidden" name="id" value="{{ .ID }}">
+                                    <button type="submit" class="action-btn usps-conv-btn" title="Convert tracking profile context over to USPS">➡️ USPS</button>
+                                </form>
+                            {{ end }}
                         </div>
                     </div>
                 {{ else }}

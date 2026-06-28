@@ -123,6 +123,7 @@ func (s *Server) Start(port string) {
 	http.HandleFunc("/package/archive", s.ArchivePackageHandler)
 	http.HandleFunc("/package/to-locker", s.MoveToLockerHandler)
 	http.HandleFunc("/package/delay", s.DelayPackageHandler)
+	http.HandleFunc("/package/convert-usps", s.ConvertToUSPSHandler)
 
 	fs := http.FileServer(http.Dir("web/static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
@@ -224,6 +225,35 @@ func (s *Server) DelayPackageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Database Error", http.StatusInternalServerError)
 		return
 	}
+
+	w.Header().Set("Location", "/")
+	w.WriteHeader(http.StatusSeeOther)
+}
+
+// ConvertToUSPSHandler upgrades a shipping partner package card directly to standard USPS tracking.
+func (s *Server) ConvertToUSPSHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id := r.FormValue("id")
+
+	// Update both the carrier string and refresh the tracking state context
+	query := `
+		UPDATE packages 
+		SET carrier = 'USPS', 
+		    updated_at = CURRENT_TIMESTAMP 
+		WHERE id = ?`
+
+	_, err := s.DB.Exec(query, id)
+	if err != nil {
+		log.Printf("[ERROR] Failed to convert package %s to USPS: %v", id, err)
+		http.Error(w, "Database Modification Error", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[OK] Package ID %s carrier manually converted to USPS.", id)
 
 	w.Header().Set("Location", "/")
 	w.WriteHeader(http.StatusSeeOther)
