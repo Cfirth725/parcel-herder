@@ -152,22 +152,56 @@ func resolveSmartLink(carrier, trackingNum string) string {
 	}
 }
 
-// LockerClearHandler handles POST requests to clear the active master locker PIN.
+// LockerClearHandler handles POST requests to clear the active master locker PIN
+// and cascade-archives any unverified building locker packages.
 func (s *Server) LockerClearHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	query := "UPDATE locker_status SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE account_id = 1 AND is_active = 1"
-	_, err := s.DB.Exec(query)
+	// Begin an atomic database transaction to guarantee data integrity
+	tx, err := s.DB.Begin()
 	if err != nil {
-		log.Printf("[ERROR] Failed to clear locker status: %v", err)
-		http.Error(w, "Internal Server Database Error", http.StatusInternalServerError)
+		log.Printf("[ERROR] Failed to start locker clearance transaction: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[OK] Account 1 master locker code manually deactivated.")
+	// Defer a rollback defensive check. If Commit() is called successfully, this becomes a no-op.
+	defer tx.Rollback()
+
+	// 1. Deactivate the active locker code for Account 1
+	lockerQuery := "UPDATE locker_status SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE account_id = 1 AND is_active = 1"
+	_, err = tx.Exec(lockerQuery)
+	if err != nil {
+		log.Printf("[ERROR] Transaction failed during locker status update: %v", err)
+		http.Error(w, "Database Update Failure", http.StatusInternalServerError)
+		return
+	}
+
+	// 2. Cascade archive any packages currently marked as Left at Locker (state 2 -> state 3)
+	packageQuery := "UPDATE packages SET package_state = 3, updated_at = CURRENT_TIMESTAMP WHERE package_state = 2"
+	res, err := tx.Exec(packageQuery)
+	if err != nil {
+		log.Printf("[ERROR] Transaction failed during cascade package archive: %v", err)
+		http.Error(w, "Database Update Failure", http.StatusInternalServerError)
+		return
+	}
+
+	// Log out how many unverified locker packages were caught in the sweep
+	rowsAffected, _ := res.RowsAffected()
+
+	// Commit the unified database transaction atomic layer
+	if err := tx.Commit(); err != nil {
+		log.Printf("[ERROR] Failed to commit locker clearance transaction: %v", err)
+		http.Error(w, "Database Commit Failure", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[OK] Account 1 master locker code manually deactivated. Cascade-archived %d unverified locker packages.", rowsAffected)
+
+	// Redirect back to the main dashboard page smoothly
 	w.Header().Set("Location", "/")
 	w.WriteHeader(http.StatusSeeOther)
 }
