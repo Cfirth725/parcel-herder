@@ -50,7 +50,14 @@ func ParseEmailBody(body string) *LogisticsPayload {
 		return payload
 	}
 
-	// 3. Scan for clean Etsy Link footprints (non-ablink style)
+	// 3. INTERCEPT CLOSED-ECOSYSTEM SHOP PAY EMAILS
+	if strings.Contains(normalized, "no-reply@shop.app") || strings.Contains(normalized, "track with the shop app") || (strings.Contains(normalized, "shop pay") && strings.Contains(normalized, "shipped")) {
+		payload.TrackingNumber = "MANUAL_ACTION_REQUIRED"
+		payload.Carrier = "Shop App (Action Required)"
+		return payload
+	}
+
+	// 4. Scan for clean Etsy Link footprints (non-ablink style)
 	if matches := etsyRegex.FindStringSubmatch(body); len(matches) > 1 {
 		extractedNum := matches[1]
 		payload.TrackingNumber = extractedNum
@@ -65,7 +72,7 @@ func ParseEmailBody(body string) *LogisticsPayload {
 		return payload
 	}
 
-	// 4. Scan for high-certainty 22-digit sequence (USPS / OSM / Wizmo final mile)
+	// 5. Scan for high-certainty 22-digit sequence (USPS / OSM / Wizmo final mile)
 	if usps22DigitRegex.MatchString(body) {
 		payload.TrackingNumber = usps22DigitRegex.FindString(body)
 		if strings.Contains(normalized, "wizmo") || strings.Contains(normalized, "osm") {
@@ -76,7 +83,7 @@ func ParseEmailBody(body string) *LogisticsPayload {
 		return payload
 	}
 
-	// 5. Scan for other standard carrier footprints
+	// 6. Scan for other standard carrier footprints
 	if upsRegex.MatchString(body) {
 		payload.TrackingNumber = upsRegex.FindString(body)
 		payload.Carrier = "UPS"
@@ -93,7 +100,7 @@ func ParseEmailBody(body string) *LogisticsPayload {
 		return payload
 	}
 
-	// 6. Catch DHL strictly if the context says 'dhl' and it finds a standalone 10-digit ID
+	// 7. Catch DHL strictly if the context says 'dhl' and it finds a standalone 10-digit ID
 	if strings.Contains(normalized, "dhl") && dhlStrictRegex.MatchString(body) {
 		payload.TrackingNumber = dhlStrictRegex.FindString(body)
 		payload.Carrier = "DHL"
