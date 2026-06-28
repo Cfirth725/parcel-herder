@@ -292,3 +292,60 @@ code {
 .btn-secondary:active {
     transform: scale(0.98);
 }
+
+/* --- Trajectory Badges & Priority Classes --- */
+.urgency-today {
+    border-color: var(--accent-blue) !important;
+    box-shadow: 0 0 10px rgba(88, 166, 255, 0.1);
+}
+
+.urgency-stale {
+    border-color: var(--accent-warn) !important;
+}
+
+.trajectory-badge {
+    font-size: 0.75rem;
+    font-weight: bold;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    margin-bottom: 0.75rem;
+    width: fit-content;
+}
+
+.blink-indicator { background-color: rgba(88, 166, 255, 0.15); color: var(--accent-blue); }
+.stale-indicator { background-color: rgba(210, 153, 34, 0.15); color: var(--accent-warn); }
+.locker-indicator { background-color: rgba(63, 185, 80, 0.15); color: var(--accent-green); }
+
+.date-display {
+    margin-top: 0.75rem;
+}
+.date-val {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* --- Inline Action Grid --- */
+.card-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+    border-top: 1px solid var(--border-color);
+    padding-top: 0.75rem;
+}
+
+.action-btn {
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 0.35rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: bold;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.clear-btn:hover { border-color: var(--accent-green); color: var(--accent-green); background: rgba(63, 185, 80, 0.05); }
+.locker-btn:hover { border-color: var(--accent-green); color: var(--accent-green); background: rgba(63, 185, 80, 0.05); }
+.delay-btn:hover { border-color: var(--accent-warn); color: var(--accent-warn); background: rgba(210, 153, 34, 0.05); }

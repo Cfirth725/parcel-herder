@@ -39,13 +39,23 @@
 
             <div class="matrix-grid">
                 {{ range .Packages }}
-                    <div class="matrix-card {{ if eq .TrackingNumber "MANUAL_ACTION_REQUIRED" }}action-required{{ end }}">
+                    <div class="matrix-card {{ .UrgencyClass }} {{ if eq .PackageState 2 }}locker-alert{{ end }} {{ if eq .TrackingNumber "MANUAL_ACTION_REQUIRED" }}action-required{{ end }}">
                         <div class="card-header">
                             <span class="carrier-label">{{ .Carrier }}</span>
                             <span class="timestamp">{{ .CreatedAt }}</span>
                         </div>
                         
                         <div class="card-body">
+                            {{ if eq .UrgencyClass "urgency-today" }}
+                                <div class="trajectory-badge blink-indicator">🚚 ARRIVING TODAY</div>
+                            {{ else if eq .UrgencyClass "urgency-stale" }}
+                                <div class="trajectory-badge stale-indicator">⚠️ REVIEW DELAY</div>
+                            {{ end }}
+
+                            {{ if eq .PackageState 2 }}
+                                <div class="trajectory-badge locker-indicator">🏢 IN BUILDING LOCKER (UNVERIFIED)</div>
+                            {{ end }}
+
                             {{ if eq .TrackingNumber "MANUAL_ACTION_REQUIRED" }}
                                 <div class="action-notice">
                                     <p>⚠️ Tracking data hidden by platform encryption.</p>
@@ -63,6 +73,32 @@
                                     {{ end }}
                                 </div>
                             {{ end }}
+
+                            {{ if ne .ExpectedDeliveryDate "" }}
+                                <div class="date-display">
+                                    <span class="label">EXPECTED ARRIVAL</span>
+                                    <span class="date-val">{{ .ExpectedDeliveryDate }}</span>
+                                </div>
+                            {{ end }}
+                        </div>
+
+                        <div class="card-actions">
+                            <form action="/package/archive" method="POST" style="display:inline;">
+                                <input type="hidden" name="id" value="{{ .ID }}">
+                                <button type="submit" class="action-btn clear-btn" title="Arrived / Archive Package">✓ Arrived</button>
+                            </form>
+
+                            {{ if ne .PackageState 2 }}
+                                <form action="/package/to-locker" method="POST" style="display:inline;">
+                                    <input type="hidden" name="id" value="{{ .ID }}">
+                                    <button type="submit" class="action-btn locker-btn" title="Mark Left at Building Locker">📍 Locker</button>
+                                </form>
+                            {{ end }}
+
+                            <form action="/package/delay" method="POST" style="display:inline;">
+                                <input type="hidden" name="id" value="{{ .ID }}">
+                                <button type="submit" class="action-btn delay-btn" title="Push Target Date Forward +1 Day">+1 Day</button>
+                            </form>
                         </div>
                     </div>
                 {{ else }}

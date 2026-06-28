@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS packages (
     carrier TEXT NOT NULL,
     last_status TEXT NOT NULL,
     location_state TEXT NOT NULL,
+    expected_delivery_date TEXT,
+    package_state INTEGER DEFAULT 1,
     is_active INTEGER DEFAULT 1,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(account_id) REFERENCES accounts(id),

@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"time"
 )
 
 // Server holds the application dependencies, primarily the SQL database connection pool.
@@ -14,11 +15,14 @@ type Server struct {
 
 // PackageView represents the flattened structure of a shipment for UI rendering.
 type PackageView struct {
-	ID             int
-	TrackingNumber string
-	Carrier        string
-	CreatedAt      string
-	TrackingURL    string
+	ID                   int
+	TrackingNumber       string
+	Carrier              string
+	CreatedAt            string
+	TrackingURL          string
+	ExpectedDeliveryDate string
+	PackageState         int
+	UrgencyClass         string // Computed: "urgency-today", "urgency-stale", or "urgency-normal"
 }
 
 // DashboardData consolidates package streams and active master locker PINs into a single template payload.
@@ -47,8 +51,26 @@ func (s *Server) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[ERROR] Failed to query locker status: %v", err)
 	}
 
-	// Fetch standard tracking records ordered chronologically by newest ingestion entry
-	rows, err := s.DB.Query("SELECT id, tracking_number, carrier, datetime(updated_at, 'localtime') FROM packages ORDER BY id DESC")
+	// Fetch standard tracking records filtered by trajectory urgency priority, hiding archived items (state 3)
+	query := `
+		SELECT 
+			id, 
+			tracking_number, 
+			carrier, 
+			datetime(updated_at, 'localtime'), 
+			COALESCE(expected_delivery_date, ''), 
+			package_state 
+		FROM packages 
+		WHERE package_state != 3 
+		ORDER BY 
+			CASE 
+				WHEN expected_delivery_date = date('now', 'localtime') THEN 0 
+				WHEN expected_delivery_date < date('now', 'localtime') AND expected_delivery_date != '' THEN 1 
+				ELSE 2 
+			END, 
+			id DESC`
+
+	rows, err := s.DB.Query(query)
 	if err != nil {
 		log.Printf("[ERROR] Failed to query packages: %v", err)
 		http.Error(w, "Internal Server Database Error", http.StatusInternalServerError)
@@ -56,13 +78,28 @@ func (s *Server) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
+	nowStr := time.Now().Format("2006-01-02")
+
 	for rows.Next() {
 		var p PackageView
-		if err := rows.Scan(&p.ID, &p.TrackingNumber, &p.Carrier, &p.CreatedAt); err != nil {
+		err := rows.Scan(&p.ID, &p.TrackingNumber, &p.Carrier, &p.CreatedAt, &p.ExpectedDeliveryDate, &p.PackageState)
+		if err != nil {
 			log.Printf("[ERROR] Row scanning failure: %v", err)
 			continue
 		}
+
 		p.TrackingURL = resolveSmartLink(p.Carrier, p.TrackingNumber)
+		p.UrgencyClass = "urgency-normal"
+
+		// Evaluate dynamic visual priority thresholds
+		if p.ExpectedDeliveryDate != "" {
+			if p.ExpectedDeliveryDate == nowStr {
+				p.UrgencyClass = "urgency-today"
+			} else if p.ExpectedDeliveryDate < nowStr {
+				p.UrgencyClass = "urgency-stale"
+			}
+		}
+
 		data.Packages = append(data.Packages, p)
 	}
 
@@ -83,6 +120,9 @@ func (s *Server) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) Start(port string) {
 	http.HandleFunc("/", s.DashboardHandler)
 	http.HandleFunc("/locker/clear", s.LockerClearHandler)
+	http.HandleFunc("/package/archive", s.ArchivePackageHandler)
+	http.HandleFunc("/package/to-locker", s.MoveToLockerHandler)
+	http.HandleFunc("/package/delay", s.DelayPackageHandler)
 
 	fs := http.FileServer(http.Dir("web/static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
@@ -118,7 +158,6 @@ func (s *Server) LockerClearHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Deactivate the active locker code for Account 1 in the database plane
 	query := "UPDATE locker_status SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE account_id = 1 AND is_active = 1"
 	_, err := s.DB.Exec(query)
 	if err != nil {
@@ -128,8 +167,64 @@ func (s *Server) LockerClearHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("[OK] Account 1 master locker code manually deactivated.")
+	w.Header().Set("Location", "/")
+	w.WriteHeader(http.StatusSeeOther)
+}
 
-	// Redirect back to the main dashboard page smoothly
+// ArchivePackageHandler handles POST requests to transition packages into the historical archive state.
+func (s *Server) ArchivePackageHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id := r.FormValue("id")
+	_, err := s.DB.Exec("UPDATE packages SET package_state = 3, updated_at = CURRENT_TIMESTAMP WHERE id = ?", id)
+	if err != nil {
+		log.Printf("[ERROR] Failed to archive package %s: %v", id, err)
+		http.Error(w, "Database Error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Location", "/")
+	w.WriteHeader(http.StatusSeeOther)
+}
+
+// MoveToLockerHandler processes fallback actions for carrier package locker delivery shortfalls.
+func (s *Server) MoveToLockerHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id := r.FormValue("id")
+	_, err := s.DB.Exec("UPDATE packages SET package_state = 2, updated_at = CURRENT_TIMESTAMP WHERE id = ?", id)
+	if err != nil {
+		log.Printf("[ERROR] Failed to shift package %s to locker state: %v", id, err)
+		http.Error(w, "Database Error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Location", "/")
+	w.WriteHeader(http.StatusSeeOther)
+}
+
+// DelayPackageHandler appends a +1 day increment to the dynamic expected arrival trajectory row.
+func (s *Server) DelayPackageHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id := r.FormValue("id")
+	query := "UPDATE packages SET expected_delivery_date = date(COALESCE(NULLIF(expected_delivery_date, ''), 'now', 'localtime'), '+1 day'), updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+	_, err := s.DB.Exec(query, id)
+	if err != nil {
+		log.Printf("[ERROR] Failed to delay package %s target date: %v", id, err)
+		http.Error(w, "Database Error", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Location", "/")
 	w.WriteHeader(http.StatusSeeOther)
 }
