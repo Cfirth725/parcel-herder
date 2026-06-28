@@ -82,6 +82,7 @@ func (s *Server) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 // Start registers the endpoints, mounts the flat static assets directory, and serves the HTTP infrastructure.
 func (s *Server) Start(port string) {
 	http.HandleFunc("/", s.DashboardHandler)
+	http.HandleFunc("/locker/clear", s.LockerClearHandler)
 
 	fs := http.FileServer(http.Dir("web/static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
@@ -107,4 +108,28 @@ func resolveSmartLink(carrier, trackingNum string) string {
 		return "https://www.osmworldwide.com/tracking/?tracking-number=" + trackingNum
 	default:
 		return ""
+	}
+}
+
+// LockerClearHandler handles POST requests to clear the active master locker PIN.
+func (s *Server) LockerClearHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Deactivate the active locker code for Account 1 in the database plane
+	query := "UPDATE locker_status SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE account_id = 1 AND is_active = 1"
+	_, err := s.DB.Exec(query)
+	if err != nil {
+		log.Printf("[ERROR] Failed to clear locker status: %v", err)
+		http.Error(w, "Internal Server Database Error", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[OK] Account 1 master locker code manually deactivated.")
+
+	// Redirect back to the main dashboard page smoothly
+	w.Header().Set("Location", "/")
+	w.WriteHeader(http.StatusSeeOther)
 }

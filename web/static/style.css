@@ -265,3 +265,30 @@ code {
 .smart-link:active {
     transform: scale(0.98);
 }
+
+/* --- Locker Clearance Form --- */
+.locker-clear-form {
+    margin-top: 1rem;
+}
+
+.btn-secondary {
+    background-color: transparent;
+    border: 1px solid var(--accent-green);
+    color: var(--accent-green);
+    padding: 0.4rem 1.2rem;
+    font-size: 0.85rem;
+    font-weight: bold;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+    background-color: rgba(63, 185, 80, 0.1);
+    border-color: var(--accent-green);
+    box-shadow: 0 0 8px rgba(63, 185, 80, 0.2);
+}
+
+.btn-secondary:active {
+    transform: scale(0.98);
+}

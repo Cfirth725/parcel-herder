@@ -30,6 +30,10 @@
                     <div class="locker-shield-badge">🔒 ACTIVE AMAZON LOCKER MASTER HUB PIN</div>
                     <div class="master-pin-display">{{ .LockerCode }}</div>
                     <p class="locker-subtext">Use this unified access token at the locker kiosk terminal to open all pending storage cells.</p>
+                    
+                    <form action="/locker/clear" method="POST" class="locker-clear-form">
+                        <button type="submit" class="btn-secondary btn-clear-locker">Clear Code / Picked Up</button>
+                    </form>
                 </div>
             {{ end }}
 
