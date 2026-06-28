@@ -50,7 +50,13 @@
                             {{ else }}
                                 <div class="tracking-display">
                                     <span class="label">TRACKING NUMBER</span>
-                                    <code>{{ .TrackingNumber }}</code>
+                                    {{ if ne .TrackingURL "" }}
+                                        <a href="{{ .TrackingURL }}" target="_blank" rel="noopener noreferrer" class="smart-link">
+                                            <code>{{ .TrackingNumber }} ↗</code>
+                                        </a>
+                                    {{ else }}
+                                        <code>{{ .TrackingNumber }}</code>
+                                    {{ end }}
                                 </div>
                             {{ end }}
                         </div>

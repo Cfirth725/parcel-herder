@@ -18,6 +18,7 @@ type PackageView struct {
 	TrackingNumber string
 	Carrier        string
 	CreatedAt      string
+	TrackingURL    string
 }
 
 // DashboardData consolidates package streams and active master locker PINs into a single template payload.
@@ -61,6 +62,7 @@ func (s *Server) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[ERROR] Row scanning failure: %v", err)
 			continue
 		}
+		p.TrackingURL = resolveSmartLink(p.Carrier, p.TrackingNumber)
 		data.Packages = append(data.Packages, p)
 	}
 
@@ -88,4 +90,21 @@ func (s *Server) Start(port string) {
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatalf("[CRITICAL] Dashboard server crashed: %v", err)
 	}
+}
+
+// resolveSmartLink pairs a tracking number with a carrier's native deep-link syntax.
+func resolveSmartLink(carrier, trackingNum string) string {
+	switch carrier {
+	case "USPS":
+		return "https://tools.usps.com/go/TrackConfirmAction?tLabels=" + trackingNum
+	case "FedEx":
+		return "https://www.fedex.com/fedextrack/?trknbr=" + trackingNum
+	case "UPS":
+		return "https://www.ups.com/track?tracknum=" + trackingNum
+	case "DHL":
+		return "https://www.dhl.com/en/express/tracking.html?AWB=" + trackingNum
+	case "OSM":
+		return "https://www.osmworldwide.com/tracking/?tracking-number=" + trackingNum
+	default:
+		return ""
 }

@@ -243,3 +243,25 @@ code {
     font-size: 0.85rem;
     color: var(--text-secondary);
 }
+
+/* --- Client-Side Smart Links --- */
+.smart-link {
+    text-decoration: none;
+    display: inline-block;
+    transition: transform 0.15s ease;
+}
+
+.smart-link code {
+    color: var(--accent-blue);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    cursor: pointer;
+}
+
+.smart-link:hover code {
+    background-color: rgba(88, 166, 255, 0.15);
+    border-color: var(--accent-blue);
+}
+
+.smart-link:active {
+    transform: scale(0.98);
+}
