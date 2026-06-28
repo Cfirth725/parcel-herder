@@ -1,13 +1,15 @@
 # 📦 Parcel Herder
 
-A lightweight, concurrent logistics background daemon and dashboard built in Go. `parcel-herder` runs locally on a home lab node, scraping inbound shipping notifications via secure IMAP streams, managing carrier telemetry with an internal SQLite engine, and providing an elegant single-pane-of-glass terminal view for pending deliveries and smart locker pickup tokens.
+A lightweight, concurrent logistics background daemon and dashboard built in Go. `parcel-herder` runs locally on a home lab node, scraping inbound shipping notifications via secure IMAP streams, managing carrier telemetry with an internal SQLite engine, and providing an elegant single-pane-of-glass dashboard view for pending deliveries and smart locker pickup tokens.
 
 ## ✨ Key Architectural Features
 - **Multi-Tenant State Management:** Engineered with a data protection model allowing isolation across multiple discrete mailboxes without data cross-contamination.
 - **Cryptographic Blind Indexing:** Enforces a DevSecOps-first approach by storing SHA-256 hashes of incoming emails, keeping raw personal identities completely off the disk layout.
 - **Fail-Fast Configuration Infrastructure:** Enforces strict environment boundaries at initialization, crashing defensively with clear logs if `PORT` bindings or security credentials are missing.
 - **Conditional Upsert Ingestion:** Distinguishes between standard tracking barcodes (deduplicated automatically on conflict) and platform-encrypted shipments (appended sequentially as actionable alerts).
-- **Locker Token Consolidation:** Pins a unified master locker key console at the top of the viewport, aligning with physical smart hubs that aggregate multiple incoming shipments behind a single active PIN.
+- **Locker Token Consolidation & Atomic Cascades:** Pins a unified master locker key console at the top of the viewport. Deactivating the master code triggers an atomic database transaction that automatically archive-sweeps all unverified locker shortfall packages simultaneously.
+- **Smart Link Resolver:** Computes dynamic, native deep-links client-side for **USPS, FedEx, UPS, DHL, and OSM Worldwide**, completely leapfrogging commercial email marketing redirect servers to preserve privacy.
+- **Urgency-Driven UI Filtering:** Leverages an internal SQLite temporal state evaluation machine to automatically highlight and pin items marked `ARRIVING TODAY` or flag stale rows for manual review.
 - **Lightweight High-Contrast Presentation:** Rejects bloated front-end frameworks in favor of semantic HTML5, native CSS variables, and a distraction-free dark mode theme optimized for local terminal dashboards.
 - **Structured DevOps Telemetry:** Built with consistent, scannable log tokens (`[INIT]`, `[SECURE]`, `[SYNC]`, `[SERVER]`, `[OK]`, `[ERROR]`) for clean, production-grade terminal visibility.
 
@@ -17,15 +19,14 @@ A lightweight, concurrent logistics background daemon and dashboard built in Go.
 │   └── main.go                 # App entry point, multi-tenant sync loop, & web server init
 ├── internal/
 │   ├── db/
-│   │   ├── db.go               # Thread-safe SQLite atomic transaction routines
-│   │   ├── db_test.go          # Native unit tests using fast, isolated :memory: targets
+│   │   ├── db.go               # Thread-safe SQLite atomic transaction routines targets
 │   │   └── schema.sql          # Normalized multi-table schemas (accounts, packages, locker_status)
 │   ├── parser/
 │   │   └── parser.go           # Compile-once regex logistics telemetry engine
 │   ├── scraper/
 │   │   └── scraper.go          # Secure TLS IMAP client & message extraction loop
 │   └── server/
-│       └── server.go           # HTTP routing engine, asset mounting, & separate stream queries
+│   │   └── server.go           # HTTP routing engine, action handlers, & dynamic link generation
 ├── web/
 │   ├── static/
 │   │   └── style.css           # High-contrast palette variables & grid layout rules
@@ -44,7 +45,7 @@ A lightweight, concurrent logistics background daemon and dashboard built in Go.
 
 ### Phase 2: Telemetry Ingestion Engine
 - [x] Establish regex boundary constraints to parse standard carriers (USPS, FedEx, UPS).
-- [x] Extend regex engine footprints to support international DHL Express and OSM Worldwide tracking.
+- [x] Extend regex engine footprints to support international DHL Express and unified OSM Worldwide tracking.
 - [x] Build strict pattern arrays to isolate anonymous 6-digit Amazon Hub Locker pickup tokens.
 - [x] Construct a secure TLS IMAP connection layer utilizing `go-imap/v2` streaming mechanics.
 - [x] Connect the scraper's parsing matches directly to database write-routines (`InsertOrUpdatePackage`).
@@ -56,7 +57,14 @@ A lightweight, concurrent logistics background daemon and dashboard built in Go.
 - [x] Implement explicit port checking and fail-fast environment guardrails on application boot.
 - [x] Integrate a functional manual management sidebar module for off-stream package registry overrides.
 
-### Phase 4: State Machine Refinement & Hardware Verification
-- [ ] Implement an explicit state-toggle mechanism (HTTP POST route) to manually clear or mark the `ACTIVE AMAZON LOCKER MASTER HUB PIN` as inactive once lockers are empty.
+### Phase 4: State Machine Refinement & Human-in-the-Loop Controls
+- [x] Implement an explicit state-toggle mechanism (HTTP POST route) to manually clear or deactivate active locker codes.
+- [x] Engineer an atomic SQL transaction block to cascade-archive unverified building locker packages when the master PIN is cleared.
+- [x] Build multi-option client-side sync controls directly onto package cards (`✓ Arrived`, `📍 Locker`, and `+1 Day Delay`).
+- [x] Implement a conditional carrier-conversion toggle shortcut to instantly upgrade shipping partner handoffs over to native USPS tracking.
+- [x] Integrate defensive edge-case interceptors for encrypted, closed-ecosystem notifications (**Etsy** and **Shop App**).
+
+### Phase 5: Automation Loops & Performance Tuning
 - [ ] Map driver-shortfall detection logic (`CheckDriverShortfalls` to identify "Left at Hub/Locker" string states that slipped through without an accompanying electronic code entry).
-- [ ] Build automated cron routines for database state-purging and archiving.
+- [ ] Build automated cron routines for database state-purging and background archiving.
+- [ ] Upgrade the polling engine to use IMAP IDLE connection sockets for near-zero-latency ingestion.
