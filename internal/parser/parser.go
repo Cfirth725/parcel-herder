@@ -43,14 +43,14 @@ func ParseEmailBody(body string) *LogisticsPayload {
 		return payload
 	}
 
-	// 2. INTERCEPT ENCRYPTED ETSY REDIRECT LINKS
+	// 2. Intercept encrypted Etsy redirect links
 	if strings.Contains(normalized, "ablink.account.etsy.com") || (strings.Contains(normalized, "etsy") && strings.Contains(normalized, "track package")) {
 		payload.TrackingNumber = "MANUAL_ACTION_REQUIRED"
 		payload.Carrier = "Etsy (Action Required)"
 		return payload
 	}
 
-	// 3. INTERCEPT CLOSED-ECOSYSTEM SHOP PAY EMAILS
+	// 3. Intercept closed-ecosystem Shop Pay emails
 	if strings.Contains(normalized, "no-reply@shop.app") || strings.Contains(normalized, "track with the shop app") || (strings.Contains(normalized, "shop pay") && strings.Contains(normalized, "shipped")) {
 		payload.TrackingNumber = "MANUAL_ACTION_REQUIRED"
 		payload.Carrier = "Shop App (Action Required)"
@@ -96,7 +96,7 @@ func ParseEmailBody(body string) *LogisticsPayload {
 	}
 	if osmRegex.MatchString(body) {
 		payload.TrackingNumber = osmRegex.FindString(body)
-		payload.Carrier = "OSM" // Unified tag
+		payload.Carrier = "OSM"
 		return payload
 	}
 

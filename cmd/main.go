@@ -10,8 +10,9 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// main initializes the application state, executes multi-tenant mailbox sync loops,
+// and launches the local HTTP dashboard server.
 func main() {
-	// Load environment setup safely
 	if err := godotenv.Load(); err != nil {
 		log.Println("[WARN] No .env file found, defaulting to system environment variables")
 	}
@@ -21,11 +22,9 @@ func main() {
 		dbPath = "parcel_herder.db"
 	}
 
-	// 1. Boot Database Plane
 	database := db.InitDB(dbPath)
 	defer database.Close()
 
-	// 2. Fetch network and target configuration keys
 	imapServer := os.Getenv("YAHOO_IMAP_SERVER")
 	envEmail1 := os.Getenv("USER_1_EMAIL")
 	envEmail2 := os.Getenv("USER_2_EMAIL")
@@ -33,10 +32,9 @@ func main() {
 	imapPassword2 := os.Getenv("YAHOO_PASSWORD_2")
 
 	if imapServer == "" || envEmail1 == "" || envEmail2 == "" || imapPassword1 == "" || imapPassword2 == "" {
-		log.Fatalf("[ERROR] Security Failure: Required configurations missing from your local .env file")
+		log.Fatalf("[ERROR] Required configurations missing from local runtime environment")
 	}
 
-	// 3. Provision Isolated Multi-Tenant Accounts
 	id1, err := db.CreateAccount(database, envEmail1)
 	if err != nil {
 		log.Fatalf("[ERROR] Failed to provision User 1: %v", err)
@@ -51,7 +49,6 @@ func main() {
 
 	log.Println("[INIT] Parcel Herder database architecture is live, secure, and cleanly mapped!")
 
-	// 4. Define our synchronization targets dynamically
 	targets := []struct {
 		email    string
 		password string
@@ -60,7 +57,6 @@ func main() {
 		{email: envEmail2, password: imapPassword2},
 	}
 
-	// 5. Execute the scraper stream loops sequentially
 	log.Println("[SYNC] Kicking off network synchronization sequence...")
 	for _, target := range targets {
 		err = scraper.FetchAndProcessMailboxes(imapServer, target.email, target.password, database)
@@ -71,11 +67,11 @@ func main() {
 
 	log.Println("All synchronization routines finalized!")
 
-	// STRICT PORT CHECKING: Fail fast if the environment isn't fully configured
 	appPort := os.Getenv("PORT")
 	if appPort == "" {
-		log.Fatalf("[CRITICAL] Configuration Failure: PORT variable is missing or blank in your local .env file")
+		log.Fatalf("[CRITICAL] Configuration Failure: PORT variable is missing or blank in your local environment")
 	}
+
 	srv := server.NewServer(database)
 	srv.Start(appPort)
 }

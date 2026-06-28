@@ -22,7 +22,7 @@ type PackageView struct {
 	TrackingURL          string
 	ExpectedDeliveryDate string
 	PackageState         int
-	UrgencyClass         string // Computed: "urgency-today", "urgency-stale", or "urgency-normal"
+	UrgencyClass         string // Computed values: "urgency-today", "urgency-stale", or "urgency-normal"
 }
 
 // DashboardData consolidates package streams and active master locker PINs into a single template payload.
@@ -45,13 +45,11 @@ func (s *Server) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	var data DashboardData
 
-	// Query the master locker code if it exists and remains active (pinned to Account 1)
 	err := s.DB.QueryRow("SELECT latest_code FROM locker_status WHERE account_id = 1 AND is_active = 1").Scan(&data.LockerCode)
 	if err != nil && err != sql.ErrNoRows {
 		log.Printf("[ERROR] Failed to query locker status: %v", err)
 	}
 
-	// Fetch standard tracking records filtered by trajectory urgency priority, hiding archived items (state 3)
 	query := `
 		SELECT 
 			id, 
@@ -91,7 +89,6 @@ func (s *Server) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 		p.TrackingURL = resolveSmartLink(p.Carrier, p.TrackingNumber)
 		p.UrgencyClass = "urgency-normal"
 
-		// Evaluate dynamic visual priority thresholds
 		if p.ExpectedDeliveryDate != "" {
 			if p.ExpectedDeliveryDate == nowStr {
 				p.UrgencyClass = "urgency-today"
@@ -116,7 +113,7 @@ func (s *Server) DashboardHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Start registers the endpoints, mounts the flat static assets directory, and serves the HTTP infrastructure.
+// Start registers the routes, mounts the flat static assets directory, and serves the HTTP core.
 func (s *Server) Start(port string) {
 	http.HandleFunc("/", s.DashboardHandler)
 	http.HandleFunc("/locker/clear", s.LockerClearHandler)
@@ -146,7 +143,10 @@ func resolveSmartLink(carrier, trackingNum string) string {
 	case "DHL":
 		return "https://www.dhl.com/en/express/tracking.html?AWB=" + trackingNum
 	case "OSM":
-		return "https://www.osmworldwide.com/tracking/?tracking-number=" + trackingNum
+		if len(trackingNum) >= 20 {
+			return "https://tools.usps.com/go/TrackConfirmAction?tLabels=" + trackingNum
+		}
+		return "https://www.osmworldwide.com/tracking/?trackingNumbers=" + trackingNum
 	default:
 		return ""
 	}
@@ -160,18 +160,14 @@ func (s *Server) LockerClearHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Begin an atomic database transaction to guarantee data integrity
 	tx, err := s.DB.Begin()
 	if err != nil {
 		log.Printf("[ERROR] Failed to start locker clearance transaction: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-
-	// Defer a rollback defensive check. If Commit() is called successfully, this becomes a no-op.
 	defer tx.Rollback()
 
-	// 1. Deactivate the active locker code for Account 1
 	lockerQuery := "UPDATE locker_status SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE account_id = 1 AND is_active = 1"
 	_, err = tx.Exec(lockerQuery)
 	if err != nil {
@@ -180,7 +176,6 @@ func (s *Server) LockerClearHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Cascade archive any packages currently marked as Left at Locker (state 2 -> state 3)
 	packageQuery := "UPDATE packages SET package_state = 3, updated_at = CURRENT_TIMESTAMP WHERE package_state = 2"
 	res, err := tx.Exec(packageQuery)
 	if err != nil {
@@ -189,10 +184,8 @@ func (s *Server) LockerClearHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Log out how many unverified locker packages were caught in the sweep
 	rowsAffected, _ := res.RowsAffected()
 
-	// Commit the unified database transaction atomic layer
 	if err := tx.Commit(); err != nil {
 		log.Printf("[ERROR] Failed to commit locker clearance transaction: %v", err)
 		http.Error(w, "Database Commit Failure", http.StatusInternalServerError)
@@ -201,7 +194,6 @@ func (s *Server) LockerClearHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[OK] Account 1 master locker code manually deactivated. Cascade-archived %d unverified locker packages.", rowsAffected)
 
-	// Redirect back to the main dashboard page smoothly
 	w.Header().Set("Location", "/")
 	w.WriteHeader(http.StatusSeeOther)
 }
@@ -273,13 +265,7 @@ func (s *Server) ConvertToUSPSHandler(w http.ResponseWriter, r *http.Request) {
 
 	id := r.FormValue("id")
 
-	// Update both the carrier string and refresh the tracking state context
-	query := `
-		UPDATE packages 
-		SET carrier = 'USPS', 
-		    updated_at = CURRENT_TIMESTAMP 
-		WHERE id = ?`
-
+	query := `UPDATE packages SET carrier = 'USPS', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
 	_, err := s.DB.Exec(query, id)
 	if err != nil {
 		log.Printf("[ERROR] Failed to convert package %s to USPS: %v", id, err)

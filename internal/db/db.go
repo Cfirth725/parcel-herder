@@ -14,7 +14,7 @@ import (
 //go:embed schema.sql
 var schemaFS embed.FS
 
-// InitDB initializes the database and configures performance pragmas.
+// InitDB initializes the database file connection and configures performance pragmas.
 func InitDB(filepath string) *sql.DB {
 	db, err := sql.Open("sqlite3", filepath)
 	if err != nil {
@@ -30,9 +30,8 @@ func InitDB(filepath string) *sql.DB {
 	return db
 }
 
-// executeSchema reads the embedded schema text and executes the initialization script.
+// executeSchema reads the embedded schema DDL script and applies it to the database instance.
 func executeSchema(db *sql.DB) {
-	// Read directly from our embedded file system variable
 	statements, err := schemaFS.ReadFile("schema.sql")
 	if err != nil {
 		log.Fatalf("[ERROR] Failed to read embedded database schema file: %v", err)
@@ -46,7 +45,7 @@ func executeSchema(db *sql.DB) {
 	log.Println("[INIT] Database architecture initialized smoothly via embedded schema.")
 }
 
-// hashEmail normalizes and hashes the email address so raw text never hits the disk.
+// hashEmail normalizes an email address string and returns its SHA-256 hex digest.
 func hashEmail(email string) string {
 	cleanEmail := strings.TrimSpace(strings.ToLower(email))
 	hasher := sha256.New()
@@ -54,7 +53,7 @@ func hashEmail(email string) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-// CreateAccount inserts a cryptographic hash of the email into the database layer.
+// CreateAccount inserts a blind cryptographic hash of an email into the accounts mapping.
 func CreateAccount(db *sql.DB, email string) (int64, error) {
 	hashedEmail := hashEmail(email)
 
@@ -73,7 +72,7 @@ func CreateAccount(db *sql.DB, email string) (int64, error) {
 	return id, nil
 }
 
-// GetAccountID retrieves the unique internal ID using the hashed email identifier.
+// GetAccountID fetches the unique internal row ID corresponding to a given email address string.
 func GetAccountID(db *sql.DB, email string) (int64, error) {
 	hashedEmail := hashEmail(email)
 	var id int64
@@ -87,7 +86,7 @@ func GetAccountID(db *sql.DB, email string) (int64, error) {
 	return id, nil
 }
 
-// InsertOrUpdatePackage writes parsed tracking telemetry into the database plane defensively.
+// InsertOrUpdatePackage writes parsed tracking telemetry and smart locker pins into the data layer defensively.
 func InsertOrUpdatePackage(db *sql.DB, accountID int64, trackingNum, carrier, lockerCode string, isLockerInt int) error {
 	tx, err := db.Begin()
 	if err != nil {
@@ -95,10 +94,8 @@ func InsertOrUpdatePackage(db *sql.DB, accountID int64, trackingNum, carrier, lo
 	}
 	defer tx.Rollback()
 
-	// 1. Process Packages Logically
 	if trackingNum != "" {
 		if trackingNum == "MANUAL_ACTION_REQUIRED" {
-			// Find the current highest box sequence for Etsy fallbacks to satisfy the unique constraint
 			var maxSeq int
 			err := tx.QueryRow(`SELECT COALESCE(MAX(box_sequence), 0) FROM packages WHERE tracking_number = 'MANUAL_ACTION_REQUIRED'`).Scan(&maxSeq)
 			if err != nil {
@@ -106,7 +103,6 @@ func InsertOrUpdatePackage(db *sql.DB, accountID int64, trackingNum, carrier, lo
 			}
 			nextSeq := maxSeq + 1
 
-			// Standard flat insert with a unique sequence number
 			insertQuery := `
 				INSERT INTO packages (account_id, tracking_number, box_sequence, carrier, last_status, location_state, is_active, updated_at)
 				VALUES (?, ?, ?, ?, 'In Transit', 'Action Required', 1, CURRENT_TIMESTAMP);
@@ -116,7 +112,6 @@ func InsertOrUpdatePackage(db *sql.DB, accountID int64, trackingNum, carrier, lo
 				return err
 			}
 		} else {
-			// Standard Deduplication Upsert for real carrier tracking numbers
 			upsertQuery := `
 				INSERT INTO packages (account_id, tracking_number, box_sequence, carrier, last_status, location_state, is_active, updated_at)
 				VALUES (?, ?, 1, ?, 'In Transit', 'Sorting Facility', 1, CURRENT_TIMESTAMP)
@@ -131,7 +126,6 @@ func InsertOrUpdatePackage(db *sql.DB, accountID int64, trackingNum, carrier, lo
 		}
 	}
 
-	// 2. Process Amazon Hub Locker Codes Safely
 	if lockerCode != "" {
 		lockerQuery := `
 			INSERT INTO locker_status (account_id, latest_code, is_active, updated_at)
@@ -150,8 +144,8 @@ func InsertOrUpdatePackage(db *sql.DB, accountID int64, trackingNum, carrier, lo
 	return tx.Commit()
 }
 
-// CheckDriverShortfalls inspects if an account has packages marked delivered
-// to a locker, but lacks an active electronic entry code in locker_status.
+// CheckDriverShortfalls verifies if an account holds packages marked delivered to a locker station
+// that lack a corresponding active collection PIN inside locker_status.
 func CheckDriverShortfalls(db *sql.DB, accountID int64) (bool, error) {
 	var count int
 	query := `

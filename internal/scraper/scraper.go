@@ -11,7 +11,8 @@ import (
 	"github.com/emersion/go-imap/v2/imapclient"
 )
 
-// FetchAndProcessMailboxes connects to the IMAP target server using v2 mechanics.
+// FetchAndProcessMailboxes connects to a target secure IMAP server, polls for unread
+// logistics messages, extracts relevant plaintext chunks, and routes parsed data to storage.
 func FetchAndProcessMailboxes(server, email, password string, database *sql.DB) error {
 	log.Printf("[SYNC] Connecting to secure IMAP stream for: %s...", email)
 
@@ -92,13 +93,11 @@ func FetchAndProcessMailboxes(server, email, password string, database *sql.DB) 
 					continue
 				}
 
-				// Map boolean flag to integer for SQLite compatibility
 				isLockerInt := 0
 				if payload.IsLockerToken {
 					isLockerInt = 1
 				}
 
-				// Write the logistics telemetry straight to the data plane
 				err = db.InsertOrUpdatePackage(database, accountID, payload.TrackingNumber, payload.Carrier, payload.LockerCode, isLockerInt)
 				if err != nil {
 					log.Printf("[ERROR] Failed to persist package telemetry to DB: %v", err)

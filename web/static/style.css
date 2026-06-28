@@ -25,7 +25,7 @@ body {
     line-height: 1.5;
 }
 
-/* --- App Header --- */
+/* --- App Header Components --- */
 .app-header {
     display: flex;
     justify-content: space-between;
@@ -50,7 +50,7 @@ body {
     border: 1px solid var(--accent-green);
 }
 
-/* --- Dashboard Container Layout --- */
+/* --- Dashboard Grid Layout --- */
 .dashboard-container {
     display: grid;
     grid-template-columns: 1fr;
@@ -63,7 +63,7 @@ body {
     }
 }
 
-/* --- Console / Form Card --- */
+/* --- Console Administration Module --- */
 .console-card {
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -114,7 +114,7 @@ body {
     border-color: #8b949e;
 }
 
-/* --- Matrix Grid Stream --- */
+/* --- Active Logistics Stream Matrix --- */
 .stream-section h2 {
     font-size: 1.2rem;
     margin-bottom: 1rem;
@@ -171,13 +171,15 @@ code {
     word-break: break-all;
 }
 
-/* --- Custom Alerts & Special Card Modifiers --- */
+/* --- Custom Layout State Modifiers --- */
 .matrix-card.locker-alert {
     border-color: var(--accent-green);
 }
+
 .matrix-card.locker-alert .carrier-label {
     color: var(--accent-green);
 }
+
 .matrix-card.locker-alert .code {
     font-size: 1.5rem;
     font-weight: bold;
@@ -189,14 +191,17 @@ code {
 .matrix-card.action-required {
     border-color: var(--accent-warn);
 }
+
 .matrix-card.action-required .carrier-label {
     color: var(--accent-warn);
 }
+
 .action-notice p {
     font-size: 0.9rem;
     color: var(--accent-warn);
     margin-bottom: 0.2rem;
 }
+
 .action-notice .subtext {
     font-size: 0.8rem;
     color: var(--text-secondary);
@@ -211,7 +216,7 @@ code {
     border-radius: 6px;
 }
 
-/* --- Standalone Master Locker Console Banner --- */
+/* --- Master Locker Global Banner --- */
 .master-locker-console {
     background-color: rgba(63, 185, 80, 0.05);
     border: 2px dashed var(--accent-green);
@@ -244,7 +249,7 @@ code {
     color: var(--text-secondary);
 }
 
-/* --- Client-Side Smart Links --- */
+/* --- Smart Track Anchor Anchors --- */
 .smart-link {
     text-decoration: none;
     display: inline-block;
@@ -266,7 +271,7 @@ code {
     transform: scale(0.98);
 }
 
-/* --- Locker Clearance Form --- */
+/* --- Locker Disabling Forms --- */
 .locker-clear-form {
     margin-top: 1rem;
 }
@@ -293,7 +298,7 @@ code {
     transform: scale(0.98);
 }
 
-/* --- Trajectory Badges & Priority Classes --- */
+/* --- Trajectory Badges & Priority Enforcements --- */
 .urgency-today {
     border-color: var(--accent-blue) !important;
     box-shadow: 0 0 10px rgba(88, 166, 255, 0.1);
@@ -319,13 +324,14 @@ code {
 .date-display {
     margin-top: 0.75rem;
 }
+
 .date-val {
     font-size: 0.85rem;
     font-weight: 600;
     color: var(--text-primary);
 }
 
-/* --- Inline Action Grid --- */
+/* --- Inline Card Action Trays --- */
 .card-actions {
     display: flex;
     gap: 0.5rem;
@@ -349,3 +355,9 @@ code {
 .clear-btn:hover { border-color: var(--accent-green); color: var(--accent-green); background: rgba(63, 185, 80, 0.05); }
 .locker-btn:hover { border-color: var(--accent-green); color: var(--accent-green); background: rgba(63, 185, 80, 0.05); }
 .delay-btn:hover { border-color: var(--accent-warn); color: var(--accent-warn); background: rgba(210, 153, 34, 0.05); }
+
+.usps-conv-btn:hover { 
+    border-color: var(--accent-blue); 
+    color: var(--accent-blue); 
+    background: rgba(88, 166, 255, 0.05); 
+}
