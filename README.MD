@@ -11,22 +11,24 @@ A lightweight, concurrent logistics background daemon and dashboard built in Go.
 - **Smart Link Resolver:** Computes dynamic, native deep-links client-side for **USPS, FedEx, UPS, DHL, and OSM Worldwide**, completely leapfrogging commercial email marketing redirect servers to preserve privacy.
 - **Urgency-Driven UI Filtering:** Leverages an internal SQLite temporal state evaluation machine to automatically highlight and pin items marked `ARRIVING TODAY` or flag stale rows for manual review.
 - **Lightweight High-Contrast Presentation:** Rejects bloated front-end frameworks in favor of semantic HTML5, native CSS variables, and a distraction-free dark mode theme optimized for local terminal dashboards.
-- **Structured DevOps Telemetry:** Built with consistent, scannable log tokens (`[INIT]`, `[SECURE]`, `[SYNC]`, `[SERVER]`, `[OK]`, `[ERROR]`) for clean, production-grade terminal visibility.
+- **Structured DevOps Telemetry:** Built with consistent, scannable log tokens (`[INIT]`, `[SECURE]`, `[SYNC]`, `[SERVER]`, `[OK]`, `[ERROR]`, `[SHUTDOWN]`) for clean, production-grade terminal visibility.
+- **Graceful Shutdown Fallbacks:** Intercepts system interruption signals (`Ctrl+C` / `SIGTERM`) via native channels, executing an explicit database `wal_checkpoint(TRUNCATE)` to cleanly flush memory-mapped journals back to disk before connection severance.
+- **Asynchronous Data Lifecycles:** Runs dedicated background workers using native channel tickers to manage internal disk optimization and state auditing without blocking main server processing loops.
 
 ## 🛠️ Project File Layout
 ```text
 ├── cmd/
-│   └── main.go                 # App entry point, multi-tenant sync loop, & web server init
+│   └── main.go                 # App entry point, multi-tenant sync loop, background workers, & server init
 ├── internal/
 │   ├── db/
 │   │   ├── db.go               # Thread-safe SQLite atomic transaction routines targets
 │   │   └── schema.sql          # Normalized multi-table schemas (accounts, packages, locker_status)
 │   ├── parser/
-│   │   └── parser.go           # Compile-once regex logistics telemetry engine
+│   │   └── parser.go           # Compile-once regex logistics telemetry engine & closed-system bypass filters
 │   ├── scraper/
 │   │   └── scraper.go          # Secure TLS IMAP client & message extraction loop
 │   └── server/
-│   │   └── server.go           # HTTP routing engine, action handlers, & dynamic link generation
+│       └── server.go           # HTTP routing engine, action handlers, background tickers, & data auditing
 ├── web/
 │   ├── static/
 │   │   └── style.css           # High-contrast palette variables & grid layout rules
@@ -62,9 +64,10 @@ A lightweight, concurrent logistics background daemon and dashboard built in Go.
 - [x] Engineer an atomic SQL transaction block to cascade-archive unverified building locker packages when the master PIN is cleared.
 - [x] Build multi-option client-side sync controls directly onto package cards (`✓ Arrived`, `📍 Locker`, and `+1 Day Delay`).
 - [x] Implement a conditional carrier-conversion toggle shortcut to instantly upgrade shipping partner handoffs over to native USPS tracking.
-- [x] Integrate defensive edge-case interceptors for encrypted, closed-ecosystem notifications (**Etsy** and **Shop App**).
+- [x] Integrate defensive edge-case interceptors for encrypted, closed-ecosystem notifications (**Etsy**, **Shop App**, and **Amazon Logistics**).
 
 ### Phase 5: Automation Loops & Performance Tuning
-- [ ] Map driver-shortfall detection logic (`CheckDriverShortfalls` to identify "Left at Hub/Locker" string states that slipped through without an accompanying electronic code entry).
-- [ ] Build automated cron routines for database state-purging and background archiving.
+- [x] Map same-day driver-shortfall detection logic (`CheckDriverShortfallsLocal` to audit missing locker codes against active trajectories).
+- [x] Build automated background cron loops for a 12-hour database vacuuming and archiving purge cycle.
+- [x] Implement a signal-trapping graceful shutdown sequence to ensure clean disk states on close.
 - [ ] Upgrade the polling engine to use IMAP IDLE connection sockets for near-zero-latency ingestion.
