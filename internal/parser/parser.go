@@ -57,7 +57,18 @@ func ParseEmailBody(body string) *LogisticsPayload {
 		return payload
 	}
 
-	// 4. Scan for clean Etsy Link footprints (non-ablink style)
+	// 4. INTERCEPT AMAZON LOGISTICS EMAIL FOOTPRINTS
+	// Bypasses closed-ecosystem tracking number parsing and returns a clean dashboard placeholder.
+	if strings.Contains(normalized, "shipment-tracking@amazon.com") ||
+		strings.Contains(normalized, "your amazon.com shipment") ||
+		(strings.Contains(normalized, "amazon") && strings.Contains(normalized, "shipped")) {
+
+		payload.TrackingNumber = "MANUAL_ACTION_REQUIRED"
+		payload.Carrier = "Amazon"
+		return payload
+	}
+
+	// 5. Scan for clean Etsy Link footprints (non-ablink style)
 	if matches := etsyRegex.FindStringSubmatch(body); len(matches) > 1 {
 		extractedNum := matches[1]
 		payload.TrackingNumber = extractedNum
@@ -72,7 +83,7 @@ func ParseEmailBody(body string) *LogisticsPayload {
 		return payload
 	}
 
-	// 5. Scan for high-certainty 22-digit sequence (USPS / OSM / Wizmo final mile)
+	// 6. Scan for high-certainty 22-digit sequence (USPS / OSM / Wizmo final mile)
 	if usps22DigitRegex.MatchString(body) {
 		payload.TrackingNumber = usps22DigitRegex.FindString(body)
 		if strings.Contains(normalized, "wizmo") || strings.Contains(normalized, "osm") {
@@ -83,7 +94,7 @@ func ParseEmailBody(body string) *LogisticsPayload {
 		return payload
 	}
 
-	// 6. Scan for other standard carrier footprints
+	// 7. Scan for other standard carrier footprints
 	if upsRegex.MatchString(body) {
 		payload.TrackingNumber = upsRegex.FindString(body)
 		payload.Carrier = "UPS"
@@ -100,7 +111,7 @@ func ParseEmailBody(body string) *LogisticsPayload {
 		return payload
 	}
 
-	// 7. Catch DHL strictly if the context says 'dhl' and it finds a standalone 10-digit ID
+	// 8. Catch DHL strictly if the context says 'dhl' and it finds a standalone 10-digit ID
 	if strings.Contains(normalized, "dhl") && dhlStrictRegex.MatchString(body) {
 		payload.TrackingNumber = dhlStrictRegex.FindString(body)
 		payload.Carrier = "DHL"
