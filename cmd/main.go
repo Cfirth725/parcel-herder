@@ -76,6 +76,7 @@ func main() {
 
 	srv := server.NewServer(database)
 	srv.StartArchivingCron(12 * time.Hour)
+	srv.StartShortfallTicker(10 * time.Minute)
 
 	// --- Graceful Shutdown Logic ---
 	shutdownChan := make(chan os.Signal, 1)

@@ -307,3 +307,47 @@ func (s *Server) StartArchivingCron(interval time.Duration) {
 		}
 	}()
 }
+
+// StartShortfallTicker boots an asynchronous background worker that periodically
+// audits the local data plane for carrier locker delivery shortfalls.
+func (s *Server) StartShortfallTicker(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+
+	go func() {
+		log.Printf("[INIT] Driver-Shortfall Ticker Loop activated (Interval: %v)", interval)
+		for range ticker.C {
+			hasShortfall, err := s.CheckDriverShortfallsLocal()
+			if err != nil {
+				log.Printf("[ERROR] Shortfall ticker failed to audit database: %v", err)
+				continue
+			}
+
+			if hasShortfall {
+				log.Println("[WARN] ALERT: Driver Shortfall Detected! Packages are marked delivered to a building locker, but your Master Locker PIN is currently blank or inactive.")
+			}
+		}
+	}()
+}
+
+// CheckDriverShortfallsLocal inspects the local data plane for carrier locker delivery shortfalls,
+// strictly targeting packages whose expected delivery trajectory is set for today.
+func (s *Server) CheckDriverShortfallsLocal() (bool, error) {
+	var count int
+	query := `
+		SELECT COUNT(*) 
+		FROM packages p
+		LEFT JOIN locker_status l ON p.account_id = l.account_id AND l.is_active = 1
+		WHERE p.account_id = 1 
+		  AND p.expected_delivery_date = date('now', 'localtime')
+		  AND p.last_status = 'Delivered' 
+		  AND (p.location_state LIKE '%Locker%' OR p.location_state LIKE '%Hub%')
+		  AND (l.latest_code IS NULL OR l.latest_code = '');
+	`
+
+	err := s.DB.QueryRow(query).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
