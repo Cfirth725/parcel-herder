@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/Cfirth725/parcel-herder/internal/db"
@@ -24,7 +26,6 @@ func main() {
 	}
 
 	database := db.InitDB(dbPath)
-	defer database.Close()
 
 	imapServer := os.Getenv("YAHOO_IMAP_SERVER")
 	envEmail1 := os.Getenv("USER_1_EMAIL")
@@ -75,5 +76,32 @@ func main() {
 
 	srv := server.NewServer(database)
 	srv.StartArchivingCron(12 * time.Hour)
-	srv.Start(appPort)
+
+	// --- Graceful Shutdown Logic ---
+	shutdownChan := make(chan os.Signal, 1)
+	signal.Notify(shutdownChan, os.Interrupt, syscall.SIGTERM)
+
+	// Run the HTTP server inside its own concurrent goroutine so it doesn't block main
+	go func() {
+		srv.Start(appPort)
+	}()
+
+	// Main execution thread blocks right here waiting for you to press Ctrl+C
+	<-shutdownChan
+	log.Println("\n[SHUTDOWN] Intercepted termination signal. Initiating graceful fallback...")
+
+	// Force an SQLite checkpoint to flush the WAL and SHM journal data to the primary disk block
+	log.Println("[SHUTDOWN] Executing checkpoint to flush WAL files...")
+	_, err = database.Exec("PRAGMA wal_checkpoint(TRUNCATE);")
+	if err != nil {
+		log.Printf("[ERROR] Failed to checkpoint WAL log layers: %v", err)
+	}
+
+	// Safely close the database pool connections exclusively here
+	log.Println("[SHUTDOWN] Severing thread-safe connection pools...")
+	if err := database.Close(); err != nil {
+		log.Printf("[ERROR] Database closure failed: %v", err)
+	}
+
+	log.Println("[OK] Parcel Herder shut down gracefully. Disk state is immaculate. Goodbye!")
 }
