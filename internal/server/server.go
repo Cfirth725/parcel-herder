@@ -121,6 +121,7 @@ func (s *Server) Start(port string) {
 	http.HandleFunc("/package/to-locker", s.MoveToLockerHandler)
 	http.HandleFunc("/package/delay", s.DelayPackageHandler)
 	http.HandleFunc("/package/convert-usps", s.ConvertToUSPSHandler)
+	http.HandleFunc("/package/manual", s.ManualAddPackageHandler)
 
 	fs := http.FileServer(http.Dir("web/static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
@@ -275,6 +276,49 @@ func (s *Server) ConvertToUSPSHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[OK] Package ID %s carrier manually converted to USPS.", id)
 
+	w.Header().Set("Location", "/")
+	w.WriteHeader(http.StatusSeeOther)
+}
+
+// ManualAddPackageHandler processes POST requests from the UI sidebar
+// to manually inject a package tracking target into the local database plane.
+func (s *Server) ManualAddPackageHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract parameters from your form inputs
+	trackingNum := r.FormValue("tracking_number")
+	carrier := r.FormValue("carrier")
+
+	if trackingNum == "" || carrier == "" {
+		http.Error(w, "Bad Request: Missing Tracking Number or Carrier", http.StatusBadRequest)
+		return
+	}
+
+	// Default to today's date so manual cards populate active views immediately
+	expectedDate := time.Now().Format("2006-01-02")
+
+	// Fixed query: Removed non-existent created_at column to align with schema.sql
+	query := `
+		INSERT INTO packages (account_id, tracking_number, carrier, expected_delivery_date, package_state, last_status, location_state, updated_at)
+		VALUES (1, ?, ?, ?, 0, 'In Transit', 'In Transit', CURRENT_TIMESTAMP)
+		ON CONFLICT(tracking_number, box_sequence) DO UPDATE SET
+			expected_delivery_date = COALESCE(NULLIF(EXCLUDED.expected_delivery_date, ''), expected_delivery_date),
+			updated_at = CURRENT_TIMESTAMP;
+	`
+
+	_, err := s.DB.Exec(query, trackingNum, carrier, expectedDate)
+	if err != nil {
+		log.Printf("[ERROR] Failed to manually inject package %s: %v", trackingNum, err)
+		http.Error(w, "Database Modification Failure", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[OK] Package %s (%s) manually registered to Master Profile.", trackingNum, carrier)
+
+	// Redirect cleanly back to the main dashboard viewport
 	w.Header().Set("Location", "/")
 	w.WriteHeader(http.StatusSeeOther)
 }
